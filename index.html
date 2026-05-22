@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GYM PRO - Control de Miembros</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #764ba2;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f4f4f4;
+        }
+        .attendance-btn {
+            background: #4CAF50;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .active {
+            background: #4CAF50;
+            color: white;
+        }
+        .error {
+            background: #f44336;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .success {
+            background: #4CAF50;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏋️ GYM PRO - Sistema de Gestión</h1>
+        
+        <div class="card">
+            <h2>Registrar Nuevo Miembro</h2>
+            <div class="form-group">
+                <label>Nombre Completo</label>
+                <input type="text" id="memberName" placeholder="Ej: Carlos López">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Membresía</label>
+                <select id="membershipType">
+                    <option value="Basic">Basic - $29.99</option>
+                    <option value="Premium">Premium - $49.99</option>
+                    <option value="VIP">VIP - $79.99</option>
+                </select>
+            </div>
+            <button onclick="addMember()">Registrar Miembro</button>
+            <div id="addMessage"></div>
+        </div>
+
+        <div class="card">
+            <h2>Lista de Miembros</h2>
+            <table id="membersTable">
+                <thead>
+                    <tr><th>ID</th><th>Nombre</th><th>Membresía</th><th>Asistencia Hoy</th></tr>
+                </thead>
+                <tbody id="membersList"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Asistencias de Hoy</h2>
+            <div id="attendanceList"></div>
+        </div>
+    </div>
+
+    <script>
+        // IMPORTANTE: Cambiar esta URL por la de tu backend en Render
+        const API_URL = 'https://tu-backend-gym.onrender.com/api';
+        
+        async function loadMembers() {
+            try {
+                const response = await fetch(`${API_URL}/members`);
+                const members = await response.json();
+                const todayAttendance = await getTodayAttendance();
+                
+                const tbody = document.getElementById('membersList');
+                tbody.innerHTML = '';
+                
+                members.forEach(member => {
+                    const attended = todayAttendance.some(a => a.memberId === member.id);
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${member.id}</td>
+                        <td>${member.name}</td>
+                        <td>${member.membership}</td>
+                        <td>
+                            ${!attended ? 
+                                `<button class="attendance-btn" onclick="markAttendance(${member.id})">✓ Marcar Asistencia</button>` : 
+                                '<span style="color:green;">✓ Presente hoy</span>'
+                            }
+                        </td>
+                    `;
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('membersList').innerHTML = '<tr><td colspan="4">Error al cargar miembros. Verifica que el backend esté corriendo.</td></tr>';
+            }
+        }
+        
+        async function getTodayAttendance() {
+            const response = await fetch(`${API_URL}/attendance/today`);
+            return await response.json();
+        }
+        
+        async function addMember() {
+            const name = document.getElementById('memberName').value;
+            const membership = document.getElementById('membershipType').value;
+            
+            if (!name) {
+                showMessage('Por favor ingresa un nombre', 'error', 'addMessage');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/members`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, membership })
+                });
+                
+                if (response.ok) {
+                    showMessage('Miembro registrado exitosamente', 'success', 'addMessage');
+                    document.getElementById('memberName').value = '';
+                    loadMembers();
+                }
+            } catch (error) {
+                showMessage('Error al registrar miembro', 'error', 'addMessage');
+            }
+        }
+        
+        async function markAttendance(memberId) {
+            try {
+                const response = await fetch(`${API_URL}/attendance`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ memberId })
+                });
+                
+                if (response.ok) {
+                    showMessage('Asistencia registrada', 'success', 'addMessage');
+                    loadMembers();
+                    loadAttendance();
+                }
+            } catch (error) {
+                showMessage('Error al registrar asistencia', 'error', 'addMessage');
+            }
+        }
+        
+        async function loadAttendance() {
+            try {
+                const response = await fetch(`${API_URL}/attendance/today`);
+                const attendance = await response.json();
+                const members = await fetch(`${API_URL}/members`).then(r => r.json());
+                
+                const attendanceDiv = document.getElementById('attendanceList');
+                if (attendance.length === 0) {
+                    attendanceDiv.innerHTML = '<p>No hay asistencias registradas hoy</p>';
+                    return;
+                }
+                
+                let html = '<table width="100%"><tr><th>Miembro</th><th>Hora</th></tr>';
+                attendance.forEach(att => {
+                    const member = members.find(m => m.id === att.memberId);
+                    if (member) {
+                        html += `<tr><td>${member.name}</td><td>${att.time}</td></tr>`;
+                    }
+                });
+                html += '</table>';
+                attendanceDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        function showMessage(msg, type, elementId) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="${type}">${msg}</div>`;
+            setTimeout(() => element.innerHTML = '', 3000);
+        }
+        
+        // Cargar datos iniciales
+        loadMembers();
+        loadAttendance();
+        // Actualizar cada 5 segundos
+        setInterval(() => {
+            loadMembers();
+            loadAttendance();
+        }, 5000);
+    </script>
+</body>
+</html>
